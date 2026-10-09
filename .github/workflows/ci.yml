@@ -1,0 +1,47 @@
+name: ci
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: cloudvault
+          POSTGRES_PASSWORD: cloudvault
+          POSTGRES_DB: cloudvault
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U cloudvault"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+      minio:
+        image: minio/minio:latest
+        env:
+          MINIO_ROOT_USER: minioadmin
+          MINIO_ROOT_PASSWORD: minioadmin
+        ports: ["9000:9000"]
+        options: >-
+          --health-cmd "curl -f http://localhost:9000/minio/health/live"
+          --health-interval 10s --health-timeout 3s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: "1.27" }
+      - run: go vet ./...
+      - run: go test ./...
+        env:
+          TEST_DATABASE_URL: postgres://cloudvault:cloudvault@localhost:5432/cloudvault?sslmode=disable
+          TEST_MINIO_ENDPOINT: localhost:9000
+  frontend:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: web } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: npm install
+      - run: npx tsc --noEmit
+      - run: npm run build

@@ -1,0 +1,92 @@
+openapi: 3.0.3
+info:
+  title: CloudVault API
+  version: 1.0.0
+  description: Secure file vault — folders, presigned S3 upload/download, trash, shares, permissions, quota.
+servers:
+  - url: http://localhost:8087
+paths:
+  /healthz:
+    get:
+      summary: Healthcheck
+      responses: { '200': { description: OK } }
+  /api/v1/auth/register:
+    post:
+      summary: Register (returns user, accessToken, orgs[])
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                email: { type: string }
+                password: { type: string }
+                orgName: { type: string }
+      responses: { '200': { description: session } }
+  /api/v1/auth/login:
+    post:
+      summary: Login (returns user, accessToken, orgs[])
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email: { type: string }
+                password: { type: string }
+      responses: { '200': { description: session }, '401': { description: invalid credentials } }
+  /api/v1/auth/refresh:
+    post:
+      summary: Rotate access token via httpOnly refresh cookie
+      responses: { '200': { description: new access token } }
+  /api/v1/folders:
+    get:
+      summary: List folders (?parentId, ?trash)
+      parameters:
+        - { name: X-Org-ID, in: header, required: true, schema: { type: string } }
+      responses: { '200': { description: folders } }
+    post:
+      summary: Create folder
+      parameters:
+        - { name: X-Org-ID, in: header, required: true, schema: { type: string } }
+      responses: { '201': { description: created } }
+  /api/v1/folders/{id}:
+    patch: { summary: Rename/move folder, responses: { '200': { description: OK } } }
+    delete: { summary: Trash (?permanent=true) folder, responses: { '200': { description: OK } } }
+  /api/v1/folders/{id}/restore:
+    post: { summary: Restore folder from trash, responses: { '200': { description: OK } } }
+  /api/v1/files:
+    get:
+      summary: List/search files (?folderId, ?q, ?type=image|video|audio|pdf|doc|other, ?trash)
+      parameters:
+        - { name: X-Org-ID, in: header, required: true, schema: { type: string } }
+      responses: { '200': { description: files } }
+  /api/v1/files/presign:
+    post:
+      summary: Mint short-lived (15min) presigned PUT URL for large/multipart uploads
+      responses: { '200': { description: '{uploadUrl, s3Key}' } }
+  /api/v1/files/complete:
+    post:
+      summary: Register file after direct-to-S3 upload (validates key + object)
+      responses: { '201': { description: created } }
+  /api/v1/files/upload:
+    post:
+      summary: Small-file multipart proxy upload (<=15 MiB)
+      responses: { '201': { description: created } }
+  /api/v1/files/{id}:
+    get: { summary: File metadata, responses: { '200': { description: OK } } }
+    patch: { summary: Rename/move file, responses: { '200': { description: OK } } }
+    delete: { summary: Trash (?permanent=true) file, responses: { '200': { description: OK } } }
+  /api/v1/files/{id}/download:
+    get: { summary: Short-lived (5min) download URL, responses: { '200': { description: '{url}' } } }
+  /api/v1/files/{id}/preview:
+    get: { summary: Inline preview URL (images/PDF), responses: { '200': { description: '{url}' } } }
+  /api/v1/files/{id}/shares:
+    post: { summary: Create expiring share link (<=168h), responses: { '201': { description: '{token}' } } }
+  /api/v1/s/{token}:
+    get: { summary: Resolve public share link (410 when expired), responses: { '200': { description: OK }, '410': { description: expired } } }
+  /api/v1/activities:
+    get: { summary: Activity feed, responses: { '200': { description: OK } } }
+  /api/v1/quota:
+    get: { summary: Quota usage, responses: { '200': { description: OK } } }

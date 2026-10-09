@@ -1,0 +1,22 @@
+# Go
+/cloudvault-go
+/api
+*.exe
+*.test
+/bin/
+
+# Next.js
+web/node_modules/
+web/.next/
+web/out/
+web/*.tsbuildinfo
+
+# Env / local
+.env
+devdata/
+*.log
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

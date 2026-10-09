@@ -1,0 +1,70 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${DB_USER:-cloudvault}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-cloudvault}
+      POSTGRES_DB: ${DB_NAME:-cloudvault}
+    ports:
+      - "${DB_PORT:-5440}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-cloudvault}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_PASSWORD:-minioadmin}
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      PORT: 8087
+      DATABASE_URL: postgres://${DB_USER:-cloudvault}:${DB_PASSWORD:-cloudvault}@db:5432/${DB_NAME:-cloudvault}?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_PASSWORD:-minioadmin}
+      MINIO_BUCKET: ${MINIO_BUCKET:-cloudvault}
+    ports:
+      - "${API_PORT:-8087}:8087"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8087/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  web:
+    build:
+      context: ./web
+      args:
+        NEXT_PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8087}
+    depends_on:
+      - api
+    ports:
+      - "${WEB_PORT:-3007}:3007"
+
+volumes:
+  pgdata:
+  miniodata:
